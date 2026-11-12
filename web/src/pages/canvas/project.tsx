@@ -6,6 +6,7 @@ import { saveAs } from "file-saver";
 import { useTranslation } from "react-i18next";
 
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
+import { selectedSeedanceTier } from "@/lib/seedance";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { createVideoGenerationTask, isVideoTaskFailed, storeGeneratedVideo, waitForVideoGenerationTask } from "@/services/api/video";
 import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -349,6 +350,7 @@ function InfiniteCanvasPage() {
                                   generateAudio: generationConfig.videoGenerateAudio,
                                   watermark: generationConfig.videoWatermark,
                                   videoMode: generationConfig.videoMode,
+                                  videoTier: selectedSeedanceTier(generationConfig.model, generationConfig.videoTier),
                               })
                             : item,
                     ),
@@ -1459,7 +1461,11 @@ function InfiniteCanvasPage() {
     }, [finishNodeDrag, handleGlobalMouseMove, handleGlobalMouseUp, handleGlobalPointerMove]);
 
     const createImageFileNode = useCallback(async (file: File, position: Position) => {
-        const image = await uploadImage(file);
+        const image = await uploadImage(file).catch((error) => {
+            message.error(error instanceof Error ? error.message : "图片上传失败");
+            return null;
+        });
+        if (!image) return false;
         const size = fitNodeSize(image.width, image.height);
         const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const newNode: CanvasNodeData = {
@@ -1476,10 +1482,15 @@ function InfiniteCanvasPage() {
         setSelectedNodeIds(new Set([id]));
         setSelectedConnectionId(null);
         setDialogNodeId(id);
-    }, []);
+        return true;
+    }, [message]);
 
     const createVideoFileNode = useCallback(async (file: File, position: Position) => {
-        const video = await uploadMediaFile(file, "video");
+        const video = await uploadMediaFile(file, "video").catch((error) => {
+            message.error(`视频上传失败：${error instanceof Error ? error.message : "请检查 OSS 配置和网络"}`);
+            return null;
+        });
+        if (!video) return;
         const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
         const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         setNodes((prev) => [
@@ -1497,10 +1508,14 @@ function InfiniteCanvasPage() {
         setSelectedNodeIds(new Set([id]));
         setSelectedConnectionId(null);
         setDialogNodeId(id);
-    }, []);
+    }, [message]);
 
     const createAudioFileNode = useCallback(async (file: File, position: Position) => {
-        const audio = await uploadMediaFile(file, "audio");
+        const audio = await uploadMediaFile(file, "audio").catch((error) => {
+            message.error(`音频上传失败：${error instanceof Error ? error.message : "请检查 OSS 配置和网络"}`);
+            return null;
+        });
+        if (!audio) return;
         const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
         const id = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         setNodes((prev) => [
@@ -1517,7 +1532,7 @@ function InfiniteCanvasPage() {
         ]);
         setSelectedNodeIds(new Set([id]));
         setSelectedConnectionId(null);
-    }, []);
+    }, [message]);
 
     const createTextNodeFromClipboard = useCallback(
         (text: string) => {
@@ -1549,8 +1564,7 @@ function InfiniteCanvasPage() {
             if (!imageType) return;
             const blob = await imageItem.getType(imageType);
             const file = new File([blob], "clipboard-image.png", { type: imageType });
-            void createImageFileNode(file, getCanvasCenter());
-            message.success(t("canvas.projectPage.clipboardImageAdded"));
+            if (await createImageFileNode(file, getCanvasCenter())) message.success(t("canvas.projectPage.clipboardImageAdded"));
             return;
         }
 
@@ -2154,7 +2168,15 @@ function InfiniteCanvasPage() {
 
                 // Replace the target node with the first file.
                 if (isAudioFile(first)) {
-                    const audio = await uploadMediaFile(first, "audio");
+                    const audio = await uploadMediaFile(first, "audio").catch((error) => {
+                        message.error(`音频上传失败：${error instanceof Error ? error.message : "请检查 OSS 配置和网络"}`);
+                        return null;
+                    });
+                    if (!audio) {
+                        uploadTargetRef.current = null;
+                        event.target.value = "";
+                        return;
+                    }
                     const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
                     setNodes((prev) =>
                         prev.map((node) =>
@@ -2174,7 +2196,15 @@ function InfiniteCanvasPage() {
                     setSelectedNodeIds(new Set([target.nodeId]));
                     setSelectedConnectionId(null);
                 } else if (first.type.startsWith("video/")) {
-                    const video = await uploadMediaFile(first, "video");
+                    const video = await uploadMediaFile(first, "video").catch((error) => {
+                        message.error(`视频上传失败：${error instanceof Error ? error.message : "请检查 OSS 配置和网络"}`);
+                        return null;
+                    });
+                    if (!video) {
+                        uploadTargetRef.current = null;
+                        event.target.value = "";
+                        return;
+                    }
                     const nextSize = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                     setNodes((prev) =>
                         prev.map((node) =>
@@ -2194,7 +2224,14 @@ function InfiniteCanvasPage() {
                     setSelectedNodeIds(new Set([target.nodeId]));
                     setSelectedConnectionId(null);
                 } else {
-                    const image = await uploadImage(first);
+                    const image = await uploadImage(first).catch((error) => {
+                        message.error(error instanceof Error ? error.message : "图片上传失败");
+                        return null;
+                    });
+                    if (!image) {
+                        event.target.value = "";
+                        return;
+                    }
                     const s = fitNodeSize(image.width, image.height);
                     setNodes((prev) =>
                         prev.map((node) =>
@@ -2257,7 +2294,7 @@ function InfiniteCanvasPage() {
             uploadTargetRef.current = null;
             event.target.value = "";
         },
-        [createAudioFileNode, createImageFileNode, createVideoFileNode, screenToCanvas, size.height, size.width],
+        [createAudioFileNode, createImageFileNode, createVideoFileNode, message, screenToCanvas, size.height, size.width],
     );
 
     const handleDrop = useCallback(
@@ -2534,6 +2571,7 @@ function InfiniteCanvasPage() {
                             generateAudio: generationConfig.videoGenerateAudio,
                             watermark: generationConfig.videoWatermark,
                             videoMode: generationConfig.videoMode,
+                            videoTier: selectedSeedanceTier(generationConfig.model, generationConfig.videoTier),
                             references: generationReferenceUrls(generationContext),
                         },
                     };
@@ -2553,6 +2591,7 @@ function InfiniteCanvasPage() {
                             generateAudio: generationConfig.videoGenerateAudio,
                             watermark: generationConfig.videoWatermark,
                             videoMode: generationConfig.videoMode,
+                            videoTier: selectedSeedanceTier(generationConfig.model, generationConfig.videoTier),
                             references: generationReferenceUrls(generationContext),
                         }, generationContext.referenceVideos, generationContext.referenceAudios);
                     } finally {
@@ -2808,6 +2847,7 @@ function InfiniteCanvasPage() {
                         generateAudio: generationConfig.videoGenerateAudio,
                         watermark: generationConfig.videoWatermark,
                         videoMode: generationConfig.videoMode,
+                        videoTier: selectedSeedanceTier(generationConfig.model, generationConfig.videoTier),
                     }, context?.referenceVideos || [], context?.referenceAudios || []);
                     return;
                 }
@@ -3092,6 +3132,7 @@ function InfiniteCanvasPage() {
                 node={contentNode}
                 isRunning={runningNodeId === contentNode.id}
                 inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
+                pricingReferences={singleSelectedNodeId === contentNode.id ? buildNodeGenerationContext(contentNode.id, nodes, connections, contentNode.metadata?.composerContent ?? contentNode.metadata?.prompt ?? "") : undefined}
                 onConfigChange={handleConfigNodeChange}
                 onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))}
                 onStop={confirmStopGeneration}
@@ -3101,7 +3142,7 @@ function InfiniteCanvasPage() {
                 }}
             />
         ),
-        [configInputsById, confirmStopGeneration, handleConfigNodeChange, handleGenerateNode, runningNodeId],
+        [singleSelectedNodeId, nodes, connections, configInputsById, confirmStopGeneration, handleConfigNodeChange, handleGenerateNode, runningNodeId],
     );
 
     if (!projectLoaded) return <CanvasRefreshShell />;

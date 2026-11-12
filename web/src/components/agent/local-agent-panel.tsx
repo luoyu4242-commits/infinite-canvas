@@ -15,6 +15,7 @@ import { resolveCanvasReferenceImages } from "@/lib/canvas/canvas-resource-refer
 import { readImageMeta } from "@/lib/image-utils";
 import { randomId } from "@/lib/utils";
 import { uploadImage } from "@/services/image-storage";
+import { uploadToOSS } from "@/services/api/oss";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useAgentSkillStore } from "@/stores/use-agent-skill-store";
 import { useShallow } from "zustand/react/shallow";
@@ -181,7 +182,6 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
     const autoConnectRef = useRef(false);
     const connectedRef = useRef(false);
     const errorLoggedRef = useRef(false);
-    const attachmentUrlsRef = useRef(new Set<string>());
     const clientIdRef = useRef("");
     const [clientReady, setClientReady] = useState(false);
     const loadThreadsSequenceRef = useRef(0);
@@ -337,7 +337,6 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
     useEffect(() => {
         pendingToolRef.current = pendingTool;
     }, [pendingTool]);
-    useEffect(() => () => attachmentUrlsRef.current.forEach((url) => URL.revokeObjectURL(url)), []);
 
     useEffect(() => {
         if (!clientReady || !enabled || !token.trim()) return;
@@ -707,10 +706,6 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             threadId = accepted.threadId || threadId;
             if (!threadId) throw new Error(rt("startConversationFailed"));
             if (selectedSkill) clearSkillSelection(selectedSkillRevision);
-            files.forEach((item) => {
-                URL.revokeObjectURL(item.url);
-                attachmentUrlsRef.current.delete(item.url);
-            });
         } catch (error) {
             const text = error instanceof Error ? error.message : rt("sendFailed");
             const response = error instanceof AgentApiError ? error.response as { code?: string; state?: AgentConversationState } : undefined;
@@ -761,17 +756,13 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
                 images.slice(0, Math.max(0, MAX_ATTACHMENTS - prev.length)).map(async (file) => {
                     const dataUrl = await readDataUrl(file);
                     const meta = await readImageMeta(dataUrl);
-                    const url = URL.createObjectURL(file);
-                    attachmentUrlsRef.current.add(url);
+                    // 附件预览使用 OSS 公网地址；dataUrl 保留给现有 Agent 附件协议。
+                    const url = await uploadToOSS(file);
                     return { id: createId(), name: file.name, type: file.type, size: file.size, width: meta.width, height: meta.height, url, dataUrl };
                 }),
             );
             const merged = [...prev, ...next];
             if (attachmentPayloadBytes(merged) > MAX_ATTACHMENT_PAYLOAD_BYTES) {
-                next.forEach((item) => {
-                    URL.revokeObjectURL(item.url);
-                    attachmentUrlsRef.current.delete(item.url);
-                });
                 addMessage({ role: "error", title: rt("imageTooLarge"), text: rt("imageLimit") });
                 return;
             }
@@ -782,11 +773,6 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
     };
 
     const removeAttachment = (id: string) => {
-        const removed = attachments.find((item) => item.id === id);
-        if (removed) {
-            URL.revokeObjectURL(removed.url);
-            attachmentUrlsRef.current.delete(removed.url);
-        }
         setAgentState({ attachments: attachments.filter((item) => item.id !== id) });
     };
 

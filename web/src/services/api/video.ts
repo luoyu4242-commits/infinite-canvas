@@ -4,8 +4,9 @@ import { nanoid } from "nanoid";
 import i18n from "@/i18n";
 import { dataUrlToFile, readFileAsDataUrl } from "@/lib/image-utils";
 import { clampVideoSeconds, computeVideoSize, inferVideoRatio } from "@/lib/media-size";
+import { seedanceQuality } from "@/lib/seedance";
 import { getMediaBlob, resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
-import { imageToDataUrl } from "@/services/image-storage";
+import { ensureImagePublicUrl, imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, withLocalProxy, type AiConfig } from "@/stores/use-config-store";
 import { runModelPlugin } from "./model-plugin";
 import type { ReferenceImage } from "@/types/image";
@@ -93,7 +94,11 @@ export async function pollVideoGenerationTask(config: AiConfig, task: VideoGener
 async function createPluginVideoTask(config: AiConfig, model: string, script: string, prompt: string, references: ReferenceImage[], options?: VideoMediaOptions): Promise<VideoGenerationTask> {
     if (!config.baseUrl.trim()) throw new Error(apiText("baseUrlRequired"));
     if (!config.apiKey.trim()) throw new Error(apiText("apiKeyRequired"));
-    const refs = await Promise.all(references.map((image) => imageToDataUrl(image)));
+    const refs = await Promise.all(references.map((image) => imageToDataUrl(image, options)));
+    // 保留 images 的 dataURL 约定；只有脚本主动请求公网地址时才补传 OSS。
+    // 同次调用复用 Promise，防止脚本多次读取导致重复上传，并保持参考图顺序。
+    let publicUrls: Promise<string[]> | undefined;
+    const getImageUrls = () => publicUrls ??= Promise.all(references.map((image) => ensureImagePublicUrl(image, options)));
     const videos = await Promise.all((options?.videos || []).map((video) => referenceMediaToFile(video, "ref.mp4", "invalidReferenceVideo", options)));
     const audios = await Promise.all((options?.audios || []).map((audio) => referenceMediaToFile(audio, "ref.mp3", "invalidReferenceAudio", options)));
     const result = videoPluginResult(
@@ -103,6 +108,7 @@ async function createPluginVideoTask(config: AiConfig, model: string, script: st
             config,
             prompt,
             images: refs,
+            getImageUrls,
             videos,
             audios,
             params: {
@@ -113,6 +119,7 @@ async function createPluginVideoTask(config: AiConfig, model: string, script: st
                 generateAudio: boolConfig(config.videoGenerateAudio, true),
                 watermark: boolConfig(config.videoWatermark, false),
                 mode: resolveVideoMode(config.videoMode, refs.length),
+                quality: seedanceQuality(config.model, config.videoTier),
             },
             signal: options?.signal,
         }),
@@ -150,16 +157,12 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
     const images = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     const videos = await Promise.all((options?.videos || []).map((video) => referenceMediaToFile(video, "ref.mp4", "invalidReferenceVideo", options)));
     const audios = await Promise.all((options?.audios || []).map((audio) => referenceMediaToFile(audio, "ref.mp3", "invalidReferenceAudio", options)));
-    const mode = resolveVideoMode(config.videoMode, images.length);
+    const params = videoRequestParams(config, images.length);
+    const mode = params.mode;
     const body = new FormData();
     body.append("model", modelOptionName(model));
     body.append("prompt", prompt);
-    body.append("seconds", normalizeVideoSeconds(config.videoSeconds));
-    body.append("size", normalizeVideoSize(config.size, config.vquality) || "1280x720");
-    body.append("resolution_name", normalizeVideoResolution(config.vquality));
-    body.append("generate_audio", String(boolConfig(config.videoGenerateAudio, true)));
-    body.append("watermark", String(boolConfig(config.videoWatermark, false)));
-    body.append("mode", mode);
+    Object.entries(params).forEach(([key, value]) => body.append(key, String(value)));
     if (mode === "frames") {
         if (images[0]) body.append("first_frame", images[0], "first.png");
         if (images[1]) body.append("last_frame", images[1], "last.png");
@@ -307,6 +310,20 @@ async function referenceMediaToFile(item: { name: string; type?: string; url?: s
 
 function normalizeVideoSeconds(value: string) {
     return clampVideoSeconds(value);
+}
+
+/** Keep the estimator's scalar parameters identical to the built-in video request. */
+export function videoRequestParams(config: AiConfig, imageCount: number) {
+    const quality = seedanceQuality(config.model, config.videoTier);
+    return {
+        ...(quality ? { quality } : {}),
+        seconds: normalizeVideoSeconds(config.videoSeconds),
+        size: normalizeVideoSize(config.size, config.vquality) || "1280x720",
+        resolution_name: normalizeVideoResolution(config.vquality),
+        generate_audio: boolConfig(config.videoGenerateAudio, true),
+        watermark: boolConfig(config.videoWatermark, false),
+        mode: resolveVideoMode(config.videoMode, imageCount),
+    };
 }
 
 function resolveVideoMode(mode: string | undefined, imageCount: number) {

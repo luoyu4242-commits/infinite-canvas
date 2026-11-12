@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import i18n from "@/i18n";
 import { withLocalProxy } from "@/stores/use-config-store";
 import { createImageThumbnail } from "@/lib/image-thumbnail";
+import { uploadToOSS } from "@/services/api/oss";
 
 export type UploadedImage = {
     url: string;
@@ -15,6 +16,7 @@ export type UploadedImage = {
 };
 
 const store = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
+const publicUrlStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_public_urls" });
 const previewStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_previews" });
 const imageLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
 const videoLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
@@ -35,6 +37,13 @@ type StoredImagePreview = { version: number; blob?: Blob };
 type ImageReadOptions = { signal?: AbortSignal };
 
 export async function uploadImage(input: string | Blob, options?: ImageReadOptions): Promise<UploadedImage> {
+    // 文件选择、拖拽和粘贴的本地 File 先上传；生成结果及已有 URL 仍沿用原有存储流程。
+    if (input instanceof File) {
+        throwIfAborted(options?.signal);
+        const publicUrl = await uploadToOSS(input);
+        throwIfAborted(options?.signal);
+        return storeImage(input, options, publicUrl);
+    }
     if (typeof input !== "string") return storeImage(input, options);
 
     let blob: Blob;
@@ -49,7 +58,7 @@ export async function uploadImage(input: string | Blob, options?: ImageReadOptio
     return storeImage(blob, options);
 }
 
-async function storeImage(blob: Blob, options?: ImageReadOptions): Promise<UploadedImage> {
+async function storeImage(blob: Blob, options?: ImageReadOptions, publicUrl?: string): Promise<UploadedImage> {
     const storageKey = `image:${nanoid()}`;
     const url = URL.createObjectURL(blob);
     try {
@@ -57,13 +66,18 @@ async function storeImage(blob: Blob, options?: ImageReadOptions): Promise<Uploa
         if (!meta) throw new Error(i18n.t("common.imageReadFailed"));
         throwIfAborted(options?.signal);
         await store.setItem(storageKey, blob);
+        if (publicUrl) await publicUrlStore.setItem(storageKey, publicUrl);
         throwIfAborted(options?.signal);
-        objectUrls.set(storageKey, url);
+        // blob 仅用于读取尺寸；业务数据使用公网 URL，本地原图保留给缩略图、下载和导出。
+        objectUrls.set(storageKey, publicUrl || url);
         await storeImagePreview(storageKey, blob);
-        return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type.startsWith("image/") ? blob.type : "" };
+        if (publicUrl) URL.revokeObjectURL(url);
+        return { url: publicUrl || url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type.startsWith("image/") ? blob.type : "" };
     } catch (error) {
         URL.revokeObjectURL(url);
+        objectUrls.delete(storageKey);
         await store.removeItem(storageKey).catch(() => undefined);
+        await publicUrlStore.removeItem(storageKey).catch(() => undefined);
         throw error;
     }
 }
@@ -142,6 +156,9 @@ function throwIfAborted(signal?: AbortSignal) {
 
 export async function resolveImageUrl(storageKey?: string, fallback = "") {
     if (!storageKey) return fallback;
+    // 刷新、重新打开素材或导入项目后，优先恢复公网地址，避免重新替换成 blob URL。
+    const publicUrl = /^https?:\/\//i.test(fallback) ? fallback : await publicUrlStore.getItem<string>(storageKey);
+    if (publicUrl) return publicUrl;
     const cached = objectUrls.get(storageKey);
     if (cached) return cached;
     const blob = await store.getItem<Blob>(storageKey);
@@ -153,6 +170,23 @@ export async function resolveImageUrl(storageKey?: string, fallback = "") {
 
 export async function getImageBlob(storageKey: string) {
     return store.getItem<Blob>(storageKey);
+}
+
+// URL 型视频接口按需调用：复用原图公网地址；旧本地图和生成图首次引用时才上传 OSS。
+export async function ensureImagePublicUrl(image: { dataUrl?: string; url?: string; storageKey?: string; name?: string }, options?: ImageReadOptions) {
+    throwIfAborted(options?.signal);
+    const source = [image.url, image.dataUrl].find((url) => url && /^https?:\/\//i.test(url)) || image.dataUrl || image.url || "";
+    const url = await resolveImageUrl(image.storageKey, source);
+    throwIfAborted(options?.signal);
+    if (/^https?:\/\//i.test(url)) return url;
+    if (!url) throw new Error("参考图原图不存在，请重新添加图片");
+
+    const blob = (image.storageKey ? await getImageBlob(image.storageKey) : null) || await fetchImageBlob(url, options);
+    throwIfAborted(options?.signal);
+    const publicUrl = await uploadToOSS(new File([blob], image.name || "reference", { type: blob.type }));
+    throwIfAborted(options?.signal);
+    if (image.storageKey) await publicUrlStore.setItem(image.storageKey, publicUrl);
+    return publicUrl;
 }
 
 // 缩略图按图片的 storageKey 另存一份 WebP，只放在本地 IndexedDB 里，不写进节点数据，也不参与导出和 WebDAV 同步。
@@ -236,6 +270,7 @@ export async function deleteStoredImages(keys: Iterable<string>) {
             objectUrls.delete(key);
             await deleteImagePreview(key);
             await store.removeItem(key);
+            await publicUrlStore.removeItem(key);
         }),
     );
 }

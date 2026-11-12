@@ -8,7 +8,7 @@ const pkg = createRequire(import.meta.url)("./package.json");
 const CORS_HEADERS = {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "*",
-    "access-control-allow-headers": "*",
+    "access-control-allow-headers": "*, Authorization",
     "access-control-expose-headers": "*",
     "access-control-max-age": "86400",
 };

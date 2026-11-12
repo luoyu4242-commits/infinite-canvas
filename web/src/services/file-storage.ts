@@ -2,6 +2,7 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 
 import { withLocalProxy } from "@/stores/use-config-store";
+import { uploadToOSS } from "@/services/api/oss";
 
 export type UploadedFile = { url: string; storageKey: string; bytes: number; mimeType: string; width?: number; height?: number; durationMs?: number };
 
@@ -9,17 +10,31 @@ const store = localforage.createInstance({ name: "infinite-canvas", storeName: "
 const objectUrls = new Map<string, string>();
 
 export async function uploadMediaFile(input: string | Blob, prefix = "file"): Promise<UploadedFile> {
+    // 画布拖入、选择和替换的本地音视频统一直传 OSS；生成的 Blob 仍沿用本地存储。
+    if (prefix === "audio" && input instanceof File && !input.type.startsWith("audio/")) {
+        input = new File([input], input.name, { type: /\.wav$/i.test(input.name) ? "audio/wav" : "audio/mpeg" });
+    }
+    const publicUrl = input instanceof File && (prefix === "audio" || prefix === "video")
+        ? await uploadToOSS(input, prefix === "audio" ? "audios" : "videos")
+        : "";
     const blob = typeof input === "string" ? await (await fetch(withLocalProxy(input))).blob() : input;
     const storageKey = `${prefix}:${nanoid()}`;
     await store.setItem(storageKey, blob);
     const url = URL.createObjectURL(blob);
-    objectUrls.set(storageKey, url);
-    const meta = blob.type.startsWith("video/") ? await readVideoMeta(url) : blob.type.startsWith("audio/") ? await readAudioMeta(url) : {};
-    return { url, storageKey, bytes: blob.size, mimeType: blob.type || "application/octet-stream", ...meta };
+    // 元信息从本地副本读取，节点保存公网 URL；本地副本继续用于下载和项目导出。
+    try {
+        const meta = blob.type.startsWith("video/") ? await readVideoMeta(url) : blob.type.startsWith("audio/") ? await readAudioMeta(url) : {};
+        objectUrls.set(storageKey, publicUrl || url);
+        return { url: publicUrl || url, storageKey, bytes: blob.size, mimeType: blob.type || "application/octet-stream", ...meta };
+    } finally {
+        if (publicUrl) URL.revokeObjectURL(url);
+    }
 }
 
 export async function resolveMediaUrl(storageKey?: string, fallback = "") {
     if (!storageKey) return fallback;
+    // 刷新或重新打开画布时保留音视频公网地址，不用本地 blob URL 覆盖它。
+    if (/^(audio|video):/.test(storageKey) && /^https?:\/\//i.test(fallback)) return fallback;
     const cached = objectUrls.get(storageKey);
     if (cached) return cached;
     const blob = await store.getItem<Blob>(storageKey);

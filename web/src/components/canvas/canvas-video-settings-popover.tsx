@@ -7,6 +7,7 @@ import { VideoSettingsPanel, videoModeLabel, videoResolutionLabel, videoSecondsL
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
+import { seedanceTierLabel } from "@/lib/seedance";
 
 type CanvasVideoSettingsPopoverProps = {
     config: AiConfig;
@@ -51,6 +52,7 @@ export function CanvasVideoSettingsPopover({ config, onConfigChange, buttonClass
                 <Button size="small" type="text" className={buttonClassName || "!h-8 !max-w-[220px] !justify-start !rounded-full !px-2.5"} style={{ background: theme.node.fill, color: theme.node.text }} icon={<Settings2 className="size-3.5" />} onClick={() => setOpen((current) => !current)}>
                     <span className="truncate">
                         {videoResolutionLabel(config.vquality)} · {videoSizeLabel(config.size)} · {videoSecondsLabel(config.videoSeconds)} · {videoModeLabel(config.videoMode)}
+                        {seedanceTierLabel(config.model, config.videoTier) ? ` · ${seedanceTierLabel(config.model, config.videoTier)}` : ""}
                     </span>
                 </Button>
             </span>
@@ -104,7 +106,7 @@ function VideoSettingsPortal({
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
         >
-            <VideoSettingsPanel config={config} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} className="space-y-4" />
+            <VideoSettingsPanel config={config} model={config.model} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} className="space-y-4" />
         </div>,
         document.body,
     );

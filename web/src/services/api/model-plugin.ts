@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
 import i18n from "@/i18n";
+import seedanceVideoScript from "./scripts/seedance-video.js?raw";
 import { buildApiUrl, withLocalProxy, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type RequestOptions = { signal?: AbortSignal };
@@ -25,6 +26,7 @@ export type RunPluginArgs = {
     config: AiConfig;
     prompt?: string;
     images?: string[];
+    getImageUrls?: () => Promise<string[]>;
     videos?: File[];
     audios?: File[];
     messages?: unknown[];
@@ -118,6 +120,7 @@ export async function runModelPlugin<T = unknown>(args: RunPluginArgs): Promise<
     const runner = new Function(
         "prompt",
         "images",
+        "getImageUrls",
         "videos",
         "audios",
         "messages",
@@ -139,6 +142,7 @@ export async function runModelPlugin<T = unknown>(args: RunPluginArgs): Promise<
         return await runner(
             args.prompt || "",
             args.images || [],
+            args.getImageUrls || (async () => []),
             args.videos || [],
             args.audios || [],
             args.messages || [],
@@ -170,6 +174,7 @@ export function getPluginVariables(): PluginVariable[] {
     return [
         { name: "prompt", type: "string", desc: i18n.t("modelPlugin.variables.prompt"), capabilities: ["image", "video", "audio"] },
         { name: "images", type: "string[]", desc: i18n.t("modelPlugin.variables.images"), capabilities: ["image", "video"] },
+        { name: "getImageUrls", type: "() => Promise<string[]>", desc: i18n.t("modelPlugin.variables.getImageUrls"), capabilities: ["video"] },
         { name: "videos", type: "File[]", desc: i18n.t("modelPlugin.variables.videos"), capabilities: ["video"] },
         { name: "audios", type: "File[]", desc: i18n.t("modelPlugin.variables.audios"), capabilities: ["video"] },
         { name: "messages", type: "{ role, content }[]", desc: i18n.t("modelPlugin.variables.messages"), capabilities: ["text"] },
@@ -435,6 +440,7 @@ return await generateImage({
         },
     ],
     video: [
+        { label: "Seedance（奥创）", script: seedanceVideoScript },
         {
             label: i18n.t("modelPlugin.templates.openai"),
             script: `/**
@@ -449,6 +455,7 @@ return await generateImage({
  * @param {string|number} params.seconds - duration
  * @param {string} params.size - output size, e.g. "1280x720"
  * @param {string} params.resolution - e.g. "720p"
+ * @param {string} params.quality - optional model-specific Seedance tier value
  * @param {boolean} params.generateAudio
  * @param {boolean} params.watermark
  * @param {string} model
@@ -468,6 +475,7 @@ async function generateVideo({
     seconds,
     size,
     resolution,
+    quality,
     generateAudio,
     watermark,
   },
@@ -483,6 +491,7 @@ async function generateVideo({
   form.set("seconds", String(seconds || 8));
   form.set("size", String(size || "1280x720"));
   form.set("resolution_name", String(resolution || "720p"));
+  if (quality) form.set("quality", quality);
   form.set("generate_audio", String(generateAudio !== false));
   form.set("watermark", String(watermark === true));
   form.set("mode", mode);

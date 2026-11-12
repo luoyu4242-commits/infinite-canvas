@@ -166,9 +166,12 @@ function drawResizeCanvas(source: CanvasImageSource, sourceWidth: number, source
 }
 
 function loadImage(dataUrl: string) {
-    return new Promise<HTMLImageElement>((resolve) => {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
         const image = new Image();
+        // OSS 原图需要以 CORS 模式读取，裁剪、切图和放大后才能导出 canvas。
+        image.crossOrigin = "anonymous";
         image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("图片读取失败，请检查图片地址和 OSS CORS 配置"));
         image.src = dataUrl;
     });
 }

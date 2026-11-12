@@ -352,7 +352,7 @@ const CanvasAssetsTab = memo(function CanvasAssetsTab({ onInsert, theme }: { onI
             else message.warning(t("canvas.sidePanel.mediaOnly"));
         } catch (error) {
             console.error(error);
-            message.error(t("canvas.sidePanel.addFailed"));
+            message.error(error instanceof Error ? error.message : t("canvas.sidePanel.addFailed"));
         } finally {
             hide();
             setUploading(false);
