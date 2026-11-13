@@ -1,5 +1,6 @@
 {
-  "name": "@basketikun/canvas-agent",
+  "name": "infinite-canvas-agent",
+  "private": true,
   "version": "0.6.0",
   "license": "MIT",
   "type": "module",
@@ -39,8 +40,5 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

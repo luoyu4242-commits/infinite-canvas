@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { createServer } from "node:http";
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Readable } from "node:stream";
+import { pathToFileURL } from "node:url";
 
 const pkg = createRequire(import.meta.url)("./package.json");
 
@@ -117,16 +119,19 @@ export function createProxyServer() {
     });
 }
 
-const args = process.argv.slice(2);
-if (args.includes("--help") || args.includes("-h")) {
-    console.log(`${pkg.name} v${pkg.version}\n\nUsage: npx ${pkg.name}@latest [--port 23210] [--host 127.0.0.1]\n\nForwards http://<host>:<port>/<full-target-url> to <full-target-url> with permissive CORS headers.`);
-    process.exit(0);
+// Importing the server from Vite must not start a second CLI listener.
+if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) {
+    const args = process.argv.slice(2);
+    if (args.includes("--help") || args.includes("-h")) {
+        console.log(`${pkg.name} v${pkg.version}\n\nUsage: node canvas-proxy/index.js [--port 23210] [--host 127.0.0.1]\n\nForwards http://<host>:<port>/<full-target-url> to <full-target-url> with permissive CORS headers.`);
+        process.exit(0);
+    }
+
+    const port = Number(readArg(args, "port", process.env.PORT || 23210));
+    const host = readArg(args, "host", process.env.HOST || "127.0.0.1");
+
+    createProxyServer().listen(port, host, () => {
+        console.log(`${pkg.name} v${pkg.version} listening on http://${host}:${port}`);
+        console.log(`Fill this address into 星程画布 → 配置 → 本地代理: http://${host}:${port}`);
+    });
 }
-
-const port = Number(readArg(args, "port", process.env.PORT || 23210));
-const host = readArg(args, "host", process.env.HOST || "127.0.0.1");
-
-createProxyServer().listen(port, host, () => {
-    console.log(`${pkg.name} v${pkg.version} listening on http://${host}:${port}`);
-    console.log(`Fill this address into Infinite Canvas → 配置 → 本地代理: http://${host}:${port}`);
-});

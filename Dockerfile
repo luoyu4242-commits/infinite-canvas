@@ -6,6 +6,8 @@ COPY web/package.json web/bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache bun install --cache-dir=/root/.bun/install/cache
 COPY VERSION /app/VERSION
 COPY CHANGELOG.md /app/CHANGELOG.md
+COPY director-desk /app/director-desk
+RUN cd /app/director-desk && bun install --ignore-scripts
 COPY web ./
 RUN bun run build
 

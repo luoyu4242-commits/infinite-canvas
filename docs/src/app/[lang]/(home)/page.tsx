@@ -5,7 +5,7 @@ import { localizePath, type Locale } from '@/lib/i18n';
 import type { Metadata } from 'next';
 
 const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
-const demoUrl = 'https://canvas.best/';
+const demoUrl = process.env.NEXT_PUBLIC_APP_URL || githubUrl;
 const starHistoryUrl = `https://www.star-history.com/?repos=${gitConfig.user}%2F${gitConfig.repo}&type=date`;
 const starHistoryChart = `https://api.star-history.com/chart?repos=${gitConfig.user}/${gitConfig.repo}&type=date&transparent=true`;
 const darkStarHistoryChart = `${starHistoryChart}&theme=dark`;
@@ -35,10 +35,10 @@ const messages = {
     center: 'Documentation',
     description: 'An infinite canvas for image creation that brings canvas composition, AI generation, reference editing, prompt libraries, and reusable assets into one workflow.',
     quickStart: 'Quick Start',
-    demo: 'Live Demo',
+    demo: process.env.NEXT_PUBLIC_APP_URL ? 'Live Demo' : 'Project repository',
     gallery: 'Gallery',
     features: 'Explore Features',
-    previewAlt: 'Infinite Canvas preview',
+    previewAlt: '星程画布 preview',
     contributors: 'Contributors',
     contributorsDescription: 'Thank you to everyone who has contributed to this project',
     contributorsAlt: 'Contributor avatars',
@@ -46,12 +46,12 @@ const messages = {
   'zh-CN': {
     eyebrow: '开源 AI 图片创作工作台',
     center: '文档中心',
-    description: '面向图片创作的无限画布，把画布编排、AI 生成、参考图编辑、提示词库和素材沉淀放在同一个工作流里。',
+    description: '面向图片创作的星程画布，把画布编排、AI 生成、参考图编辑、提示词库和素材沉淀放在同一个工作流里。',
     quickStart: '快速开始',
-    demo: '在线体验',
+    demo: process.env.NEXT_PUBLIC_APP_URL ? '在线体验' : '项目仓库',
     gallery: '效果展示',
     features: '功能介绍',
-    previewAlt: '无限画布效果图',
+    previewAlt: '星程画布效果图',
     contributors: '开发贡献者',
     contributorsDescription: '感谢所有为本项目做出贡献的开发者',
     contributorsAlt: '开发贡献者头像',

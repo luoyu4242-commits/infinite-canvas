@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { saveAs } from "file-saver";
 import { useTranslation } from "react-i18next";
 import { GenerationPrice } from "@/components/generation-price";
+import { SeedanceBillingNotice } from "@/components/seedance-billing-notice";
 
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { ModelPicker } from "@/components/model-picker";
@@ -466,6 +467,7 @@ export default function VideoPage() {
                         </div>
 
                         <div className="mt-auto pt-6">
+                            <SeedanceBillingNotice config={effectiveConfig} model={model} />
                             <div className="mb-2"><GenerationPrice config={buildVideoConfig(effectiveConfig, model)} mode="video" references={{ referenceImages: references }} paused={running} /></div>
                             <Button type="primary" size="large" block icon={<Sparkles className="size-4" />} loading={running} disabled={!canGenerate || running} onClick={() => void generate()}>
                                 {t("workbench.generate")}

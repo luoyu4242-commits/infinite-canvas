@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { ModelPicker } from "@/components/model-picker";
 import { GenerationPrice } from "@/components/generation-price";
+import { SeedanceBillingNotice } from "@/components/seedance-billing-notice";
 import { getGenerationCount, sourceNodeReferenceImages } from "@/lib/canvas/canvas-generation-helpers";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { buildNodeGenerationContext } from "./canvas-node-generation";
@@ -153,6 +154,7 @@ export function CanvasNodePromptPanel({ node, nodes, isRunning, onPromptChange, 
                     </span>
                 </Button>
             </div>
+            {mode === "video" ? <SeedanceBillingNotice config={config} /> : null}
             {pricingReferences ? <div className="mt-2 flex justify-end"><GenerationPrice config={config} mode={mode} references={pricingReferences} count={pricingCount} paused={isRunning} /></div> : null}
             <Modal title={t("canvas.promptPanel.editorTitle")} open={expanded} centered width={760} footer={null} onCancel={() => setExpanded(false)} destroyOnHidden>
                 <div data-canvas-no-zoom className="pt-2" onWheelCapture={(event) => event.stopPropagation()}>

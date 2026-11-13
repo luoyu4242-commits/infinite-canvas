@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { testLocalProxy } from "@/services/api/local-proxy";
-import { DEFAULT_LOCAL_PROXY_URL, LOCAL_PROXY_PACKAGE, normalizeLocalProxyUrl, useConfigStore } from "@/stores/use-config-store";
+import { DEFAULT_LOCAL_PROXY_URL, LOCAL_PROXY_COMMAND, normalizeLocalProxyUrl, useConfigStore } from "@/stores/use-config-store";
 
 export function ConfigLocalProxy() {
     const { message } = App.useApp();
@@ -69,8 +69,7 @@ export function ConfigLocalProxy() {
 }
 
 function localProxyCommand(proxyUrl: string) {
-    // Pinned to @latest because npx otherwise reuses whatever version it already cached.
-    const command = `npx ${LOCAL_PROXY_PACKAGE}@latest`;
+    const command = LOCAL_PROXY_COMMAND;
     try {
         const port = new URL(normalizeLocalProxyUrl(proxyUrl) || DEFAULT_LOCAL_PROXY_URL).port;
         return port && port !== new URL(DEFAULT_LOCAL_PROXY_URL).port ? `${command} --port ${port}` : command;

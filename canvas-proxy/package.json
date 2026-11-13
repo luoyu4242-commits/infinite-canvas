@@ -1,7 +1,8 @@
 {
-  "name": "@basketikun/canvas-proxy",
+  "name": "infinite-canvas-proxy",
+  "private": true,
   "version": "0.1.0",
-  "description": "Minimal local forwarding proxy that lets the Infinite Canvas web app call AI provider APIs without CORS restrictions.",
+  "description": "Minimal local forwarding proxy that lets the 星程画布 web app call AI provider APIs without CORS restrictions.",
   "license": "MIT",
   "type": "module",
   "main": "./index.js",
@@ -17,8 +18,5 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

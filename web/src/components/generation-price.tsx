@@ -23,6 +23,7 @@ export function GenerationPrice({ config, mode, references, count = 1, paused = 
     const details = (
         <div className="max-w-72 text-xs" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
             {estimate.error ? <p>{estimate.error}</p> : null}
+            {estimate.panelEstimate ? <p className="mb-2">{t("pricing.scriptNote")}</p> : null}
             <dl className="space-y-1.5">
                 {rows.map(([label, amount]) => typeof amount === "number" && Number.isFinite(amount) && amount >= 0 ? <div key={label} className="flex justify-between gap-6"><dt className="opacity-65">{label}</dt><dd className="m-0 tabular-nums">{money(amount)}</dd></div> : null)}
             </dl>
@@ -36,7 +37,7 @@ export function GenerationPrice({ config, mode, references, count = 1, paused = 
             <Popover content={details} trigger="click" placement="top" title={t("pricing.details")}>
                 <button type="button" className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded px-1 py-1 text-left hover:bg-black/5 dark:hover:bg-white/10" aria-label={t("pricing.details")}>
                     {estimate.loading ? <LoaderCircle className="size-3 shrink-0 animate-spin" /> : <Info className="size-3 shrink-0 opacity-60" />}
-                    <span aria-live="polite" className="truncate tabular-nums">{estimate.paused ? t("pricing.paused") : data ? t("pricing.estimate", { amount: money(data.effective_total_rmb * count) }) : t(estimate.loading ? "pricing.loading" : "pricing.unavailable")}</span>
+                    <span aria-live="polite" className="truncate tabular-nums">{estimate.paused ? t("pricing.paused") : data ? t(estimate.panelEstimate ? "pricing.panelEstimate" : "pricing.estimate", { amount: money(data.effective_total_rmb * count) }) : t(estimate.loading ? "pricing.loading" : "pricing.unavailable")}</span>
                 </button>
             </Popover>
             {estimate.canRefresh && !estimate.loading ? <button type="button" className="shrink-0 cursor-pointer rounded p-1 opacity-60 hover:bg-black/5 dark:hover:bg-white/10" onClick={estimate.refresh} aria-label={t("pricing.refresh")} title={t("pricing.refresh")}><RefreshCw className="size-3" /></button> : null}

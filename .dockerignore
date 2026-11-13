@@ -8,6 +8,9 @@ docs/node_modules
 docs/out
 web/.next
 web/node_modules
+director-desk/node_modules
+web/public/director-desk
+.codex-tmp
 web/out
 *.log
 .env*

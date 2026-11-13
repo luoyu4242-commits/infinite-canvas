@@ -11,8 +11,11 @@ import ImagePage from "@/pages/image";
 import NotFound from "@/pages/not-found";
 import PromptsPage from "@/pages/prompts";
 import VideoPage from "@/pages/video";
+import AuthPage from "@/pages/auth";
 
 export const router = createBrowserRouter([
+    { path: "/login", element: <AuthPage key="login" mode="login" /> },
+    { path: "/register", element: <AuthPage key="register" mode="register" /> },
     {
         element: (
             <UserLayout>

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { ModelPicker } from "@/components/model-picker";
 import { GenerationPrice } from "@/components/generation-price";
+import { SeedanceBillingNotice } from "@/components/seedance-billing-notice";
 import { getGenerationCount } from "@/lib/canvas/canvas-generation-helpers";
 import type { PricingReferences } from "@/services/api/pricing";
 import { defaultConfig, resolveModelForCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -115,6 +116,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, pricingRe
                 )}
             </div>
 
+            {mode === "video" ? <SeedanceBillingNotice config={config} /> : null}
             {pricingReferences ? <div className="mb-1"><GenerationPrice config={config} mode={mode} references={pricingReferences} count={mode === "image" ? getGenerationCount(config.count) : 1} paused={isRunning} /></div> : null}
             <Button
                 type="primary"

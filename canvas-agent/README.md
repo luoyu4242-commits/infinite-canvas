@@ -1,19 +1,29 @@
-# Infinite Canvas Agent
+# 星程画布 Agent
 
 本地 Canvas Agent 用来连接画布网页和用户电脑上的 Codex / Claude Code。本地开发时优先连接 `http://localhost:3000`，不需要先使用线上站点。
 
 ## 启动
 
+首次使用先从本仓库安装、构建并链接 Agent：
+
 ```bash
-npx -y @basketikun/canvas-agent@latest
+cd canvas-agent
+npm install
+npm run build
+npm link
+cd ..
 ```
 
-带上 `@latest` 是因为 npx 会缓存已下载的版本，不加就可能一直运行旧版本。
+```bash
+canvas-agent
+```
+
+`canvas-agent` 应指向本仓库链接的可执行文件，不会自动下载其他项目的 npm 包。开发时也可在项目根目录运行 `npm --prefix canvas-agent run dev`。
 
 需要排查连接、线程、Codex app-server 或工具调用问题时，可开启 Debug 模式：
 
 ```bash
-npx -y @basketikun/canvas-agent@latest --debug
+canvas-agent --debug
 ```
 
 Debug 日志会以 `[DEBUG][HH:mm:ss]` 等传统格式输出到终端，并按启动日期保存到 `~/.infinite-canvas/logs/canvas-agent-YYYY-MM-DD.log`。终端日志带级别颜色，文件日志为纯文本；日志包含 HTTP、SSE、线程、turn、Codex app-server 和工具调用事件，token 与图片 Data URL 会自动隐藏。
@@ -40,17 +50,17 @@ Codex app 插件会读取启动输出里的 Local URL 和 Connect token，并直
 
 Canvas Agent 默认只监听 `127.0.0.1`。网页第一次带正确 token 连接后，Canvas Agent 会记录该网页 Origin；之后其他 Origin 不能复用这个本地 Agent，除非用户清理 `~/.infinite-canvas/canvas-agent.json` 里的 `origins`。
 
-## 发布
+## 更新
 
-`canvas-agent` 使用自己的 `package.json` 版本号，不跟仓库根目录 `VERSION` 绑定。推送到 `main` 后，GitHub Actions 会检查 npm 上是否已经存在当前包版本；不存在时才发布 `@basketikun/canvas-agent`。
+`canvas-agent` 使用自己的 `package.json` 版本号，不跟仓库根目录 `VERSION` 绑定。该包仅供本地使用，更新仓库后重新安装依赖并构建。
 
-发布前需要在 GitHub 仓库 Secrets 中配置 `NPM_TOKEN`。
+本地包不发布到 npm，也不检查原项目的 npm 更新。
 
 ## Codex MCP
 
 如果希望 Codex 终端能直接操作画布，需要先把 Canvas Agent 注册成 Codex MCP。
 
-直接运行 `npx -y @basketikun/canvas-agent@latest` 只启动本地 Agent 服务，不会安装 MCP，也不会增加 Codex 工具上下文。只有安装 Codex app 插件，或手动执行 `codex mcp add` 后，`infinite-canvas` 工具才会进入 Codex 上下文；由于工具较多，不使用时建议移除。
+直接运行 `canvas-agent` 只启动本地 Agent 服务，不会安装 MCP，也不会增加 Codex 工具上下文。只有安装 Codex app 插件，或手动执行 `codex mcp add` 后，`infinite-canvas` 工具才会进入 Codex 上下文；由于工具较多，不使用时建议移除。
 
 通过插件安装时移除插件：
 
@@ -66,7 +76,7 @@ codex mcp remove infinite-canvas
 
 ### Codex app 插件
 
-仓库内提供了 Codex app 插件：`plugins/infinite-canvas`。在 Codex app 中添加本仓库的 marketplace 后，可以安装 `Infinite Canvas` 插件；插件会注册同一个 `infinite-canvas` MCP，并带上画布操作说明。
+仓库内提供了 Codex app 插件：`plugins/infinite-canvas`。在 Codex app 中添加本仓库的 marketplace 后，可以安装 `星程画布` 插件；插件会注册同一个 `infinite-canvas` MCP，并带上画布操作说明。
 
 添加本地 marketplace 时建议使用仓库绝对路径，避免 Codex 从其他工作目录解析失败：
 
@@ -76,18 +86,18 @@ codex plugin marketplace add "$(pwd)"
 codex plugin add infinite-canvas@infinite-canvas-local
 ```
 
-插件默认通过 npm 启动 MCP；这个命令只提供 MCP 工具，不会把 MCP 写入全局配置，也不会在退出时自动卸载：
+插件使用已链接的本地命令启动 MCP；这个命令只提供 MCP 工具：
 
 ```bash
-npx -y @basketikun/canvas-agent@latest mcp
+canvas-agent mcp
 ```
 
-使用时可以直接在 Codex 里说“打开 Infinite Canvas”，插件会启动本地 Agent，读取 Local URL 和 Connect token，然后在右侧打开 `https://canvas.best/` 并自动新建、连接画布；只有明确要求使用本地项目时才会启动本地前端。
+使用时可以直接说“打开 星程画布”，插件会启动本地前端和 Agent，并使用 Vite 输出的地址打开、连接画布。
 
 Canvas Agent 启动后，给 Codex 添加 MCP：
 
 ```bash
-codex mcp add infinite-canvas -- npx -y @basketikun/canvas-agent@latest mcp
+codex mcp add infinite-canvas -- canvas-agent mcp
 ```
 
 本仓库开发时可以改成，实际使用建议替换为本机绝对路径：
@@ -102,8 +112,8 @@ Canvas Agent 源码使用 TypeScript 编写，MCP 协议层使用官方 `@modelc
 
 ```toml
 [mcp_servers.infinite-canvas]
-command = "npx"
-args = ["-y", "@basketikun/canvas-agent@latest", "mcp"]
+command = "canvas-agent"
+args = ["mcp"]
 default_tools_approval_mode = "approve"
 ```
 
@@ -147,7 +157,7 @@ Claude Code Adapter 代码暂时保留，但当前网页侧边栏只开放 Codex
 如果希望 Claude Code 也能操作画布，需要给 Claude Code 添加同一个 MCP。建议用 user scope，避免 Canvas Agent 从不同目录启动时找不到配置：
 
 ```bash
-claude mcp add --scope user --transport stdio infinite-canvas -- npx -y @basketikun/canvas-agent@latest mcp
+claude mcp add --scope user --transport stdio infinite-canvas -- canvas-agent mcp
 ```
 
 本仓库开发时可以改成：

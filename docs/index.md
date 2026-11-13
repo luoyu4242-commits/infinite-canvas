@@ -1,4 +1,4 @@
-# Infinite Canvas Documentation Index
+# 星程画布 Documentation Index
 
 ## Overview
 

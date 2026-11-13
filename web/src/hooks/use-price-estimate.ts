@@ -10,7 +10,7 @@ export function usePriceEstimate(config: AiConfig, mode: ModelCapability, refere
     useConfigStore((state) => state.config.proxyEnabled);
     useConfigStore((state) => state.config.proxyUrl);
     const prepared = preparePriceEstimate(config, mode, references);
-    const request = prepared && "body" in prepared ? JSON.stringify({ url: prepared.url, apiKey: prepared.apiKey, body: prepared.body }) : "";
+    const request = prepared && "body" in prepared ? JSON.stringify({ url: prepared.url, apiKey: prepared.apiKey, body: prepared.body, modelSchemaUrl: prepared.modelSchemaUrl, panelEstimate: prepared.panelEstimate }) : "";
     const [revision, setRevision] = useState(0);
     const identity = useMemo(() => ({ request, revision, paused }), [request, revision, paused]);
     const [result, setResult] = useState<{ identity: typeof identity; data?: PriceEstimate; error?: string }>();
@@ -19,8 +19,8 @@ export function usePriceEstimate(config: AiConfig, mode: ModelCapability, refere
         if (!identity.request || identity.paused) return;
         const controller = new AbortController();
         const timer = window.setTimeout(() => {
-            const { url, apiKey, body } = JSON.parse(identity.request);
-            void fetchPriceEstimate(url, apiKey, body, controller.signal).then(
+            const { url, apiKey, body, modelSchemaUrl } = JSON.parse(identity.request);
+            void fetchPriceEstimate(url, apiKey, body, controller.signal, modelSchemaUrl).then(
                 (data) => { if (!controller.signal.aborted) setResult({ identity, data }); },
                 (error: unknown) => { if (!controller.signal.aborted) setResult({ identity, error: error instanceof Error ? error.message : t("pricing.unavailable") }); },
             );
@@ -31,6 +31,7 @@ export function usePriceEstimate(config: AiConfig, mode: ModelCapability, refere
     const current = result?.identity === identity ? result : undefined;
     return {
         visible: prepared !== null,
+        panelEstimate: Boolean(prepared && "panelEstimate" in prepared && prepared.panelEstimate),
         data: current?.data,
         error: prepared?.problem || current?.error,
         loading: Boolean(request && !paused && !current),

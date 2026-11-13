@@ -8,6 +8,7 @@ import { type CanvasTheme } from "@/lib/canvas-theme";
 import { clampVideoSeconds, computeVideoSize, inferVideoRatio, parseVideoResolution, readVideoDimensions, VIDEO_SECONDS_MAX, VIDEO_SECONDS_MIN, videoRatioOptions } from "@/lib/media-size";
 import { type AiConfig } from "@/stores/use-config-store";
 import { seedanceTierConfig, seedanceTiers, selectedSeedanceTier } from "@/lib/seedance";
+import { SeedanceBillingNotice } from "@/components/seedance-billing-notice";
 
 const resolutionOptions = [
     { value: "480", label: "480p" },
@@ -54,6 +55,7 @@ export function VideoSettingsPanel({ config, model, onConfigChange, theme, showT
         <ImageSettingsTheme theme={theme}>
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-lg font-semibold">{t("settingsPanels.video.title")}</div> : null}
+                <SeedanceBillingNotice config={config} model={model} />
                 {tierConfig ? (
                     <SettingGroup title={t("settingsPanels.video.tier")} color={theme.node.muted}>
                         <div className="grid grid-cols-3 gap-2.5">

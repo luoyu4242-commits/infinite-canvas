@@ -9,6 +9,8 @@ data/
 .DS_Store
 .idea
 web/dist
+web/public/director-desk/
+.codex-tmp/
 
 **/dist
 web/public/plugins

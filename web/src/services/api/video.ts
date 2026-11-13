@@ -111,16 +111,7 @@ async function createPluginVideoTask(config: AiConfig, model: string, script: st
             getImageUrls,
             videos,
             audios,
-            params: {
-                seconds: normalizeVideoSeconds(config.videoSeconds),
-                size: normalizeVideoSize(config.size, config.vquality),
-                resolution: normalizeVideoResolution(config.vquality),
-                ratio: videoAspectRatio(config.size),
-                generateAudio: boolConfig(config.videoGenerateAudio, true),
-                watermark: boolConfig(config.videoWatermark, false),
-                mode: resolveVideoMode(config.videoMode, refs.length),
-                quality: seedanceQuality(config.model, config.videoTier),
-            },
+            params: videoPluginParams(config, refs.length),
             signal: options?.signal,
         }),
     );
@@ -323,6 +314,20 @@ export function videoRequestParams(config: AiConfig, imageCount: number) {
         generate_audio: boolConfig(config.videoGenerateAudio, true),
         watermark: boolConfig(config.videoWatermark, false),
         mode: resolveVideoMode(config.videoMode, imageCount),
+    };
+}
+
+/** Shared panel values passed to video scripts and used by their reference estimates. */
+export function videoPluginParams(config: AiConfig, imageCount: number) {
+    return {
+        seconds: normalizeVideoSeconds(config.videoSeconds),
+        size: normalizeVideoSize(config.size, config.vquality),
+        resolution: normalizeVideoResolution(config.vquality),
+        ratio: videoAspectRatio(config.size),
+        generateAudio: boolConfig(config.videoGenerateAudio, true),
+        watermark: boolConfig(config.videoWatermark, false),
+        mode: resolveVideoMode(config.videoMode, imageCount),
+        quality: seedanceQuality(config.model, config.videoTier),
     };
 }
 

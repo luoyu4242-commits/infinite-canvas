@@ -6,6 +6,7 @@ import { NODE_SPECS } from "@/constant/canvas";
 import { registerNodeDefinitions } from "@/lib/canvas/node-registry";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { CanvasNodeDefinition, CanvasNodeResource } from "@/types/canvas-plugin";
+import { directorNode } from "./director-node";
 
 // Extensible metadata for built-in nodes, reusing NODE_SPECS for size and initial metadata.
 // Rendering remains in canvas-node's internal renderer, so no Content component is provided.
@@ -36,4 +37,5 @@ export function registerBuiltinNodes() {
     if (registered) return;
     registered = true;
     registerNodeDefinitions(BUILTIN_DEFINITIONS, "builtin");
+    registerNodeDefinitions([directorNode], "director");
 }

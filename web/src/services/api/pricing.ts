@@ -5,7 +5,7 @@ import { buildApiUrl, resolveModelRequestConfig, resolveModelScript, type AiConf
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { imageRequestParams } from "./image";
-import { videoRequestParams } from "./video";
+import { videoPluginParams, videoRequestParams } from "./video";
 
 export type PricingReferences = { referenceImages?: ReferenceImage[]; referenceVideos?: ReferenceVideo[]; referenceAudios?: ReferenceAudio[] };
 export type PriceEstimate = {
@@ -25,13 +25,13 @@ export function supportsPriceEstimate(baseUrl: string) {
     }
 }
 
-/** One actual generation request; callers multiply by the number of independent requests. */
+/** One panel-configured generation request; custom scripts may change the actual request. */
 export function preparePriceEstimate(config: AiConfig, mode: ModelCapability, references: PricingReferences = {}) {
     const channel = resolveModelRequestConfig(config, config.model);
     if (!supportsPriceEstimate(channel.baseUrl) || (mode !== "image" && mode !== "video")) return null;
     const fail = (key: string) => ({ problem: i18n.t(`pricing.${key}`) });
     if (!channel.apiKey.trim()) return fail("missingKey");
-    if (resolveModelScript(config, config.model)) return fail("scriptUnsupported");
+    const script = resolveModelScript(config, config.model);
     if (channel.apiFormat !== "openai") return fail("protocolUnsupported");
     const images = references.referenceImages || [];
     const videos = mode === "video" ? references.referenceVideos || [] : [];
@@ -42,9 +42,14 @@ export function preparePriceEstimate(config: AiConfig, mode: ModelCapability, re
     if ([...imageUrls, ...videoUrls, ...audioUrls].some((url) => !/^https?:\/\//i.test(url))) return fail("publicReferencesRequired");
     if (videos.some((video) => !Number.isFinite(video.durationMs) || !video.durationMs || video.durationMs < 0)) return fail("durationRequired");
     try {
-        const params = mode === "image" ? { ...imageRequestParams(channel), n: 1 } : videoRequestParams(channel, images.length);
+        const seedance = mode === "video" && channel.model.startsWith("seedance-");
+        const params = mode === "image" ? { ...imageRequestParams(channel), n: 1 } : seedance
+            ? seedancePriceParams(channel, images.length, Boolean(videos.length || audios.length))
+            : videoRequestParams(channel, images.length);
         return {
             problem: "",
+            panelEstimate: Boolean(script),
+            modelSchemaUrl: seedance ? buildApiUrl(channel.baseUrl, `/skills/models/${encodeURIComponent(channel.model)}`) : undefined,
             url: buildApiUrl(channel.baseUrl, "/pricing-estimate"),
             apiKey: channel.apiKey,
             body: {
@@ -64,9 +69,47 @@ export function preparePriceEstimate(config: AiConfig, mode: ModelCapability, re
     }
 }
 
-export async function fetchPriceEstimate(url: string, apiKey: string, body: unknown, signal: AbortSignal): Promise<PriceEstimate> {
+type EstimateBody = { model: string; modality: string; strategy: string; params: Record<string, unknown> };
+type ModelParameter = { name: string; options?: Array<{ value: string | number | boolean }> };
+
+function seedancePriceParams(config: AiConfig, imageCount: number, hasReferenceMedia: boolean) {
+    const video = videoPluginParams(config, imageCount);
+    const referenceMode = video.mode === "reference" || hasReferenceMedia;
+    return {
+        duration: Number(video.seconds),
+        resolution: video.resolution,
+        aspect_ratio: video.ratio,
+        quality: video.quality,
+        generate_audio: video.generateAudio,
+        watermark: video.watermark,
+        mode: referenceMode ? "reference" : imageCount === 2 ? "first-last" : imageCount ? "first-frame" : "text-to-video",
+    };
+}
+
+export async function fetchPriceEstimate(url: string, apiKey: string, body: EstimateBody, signal: AbortSignal, modelSchemaUrl?: string): Promise<PriceEstimate> {
     try {
-        const { data } = await axios.post<PriceEstimate>(url, body, { headers: { Authorization: `Bearer ${apiKey}` }, signal });
+        const options = { headers: { Authorization: `Bearer ${apiKey}` }, signal };
+        if (modelSchemaUrl) {
+            // Mirror the Seedance template's declared parameters, defaults and option values.
+            const { data: model } = await axios.get<{ params: ModelParameter[] }>(modelSchemaUrl, options);
+            if (!Array.isArray(model?.params)) throw new Error(i18n.t("pricing.invalidModelSchema"));
+            const fields = new Map(model.params.map((field) => [field.name, field]));
+            const params: Record<string, unknown> = {};
+            for (const [name, value] of Object.entries(body.params)) {
+                if (value === undefined || value === null || value === "") continue;
+                if (name === "video_total_duration_sec") { params[name] = value; continue; }
+                const field = fields.get(name);
+                if (!field && Array.isArray(value) && value.length) throw new Error(i18n.t("pricing.invalidParameter", { param: name, value: i18n.t("pricing.referenceMedia") }));
+                if (!field) continue;
+                if (!field.options?.length) { params[name] = value; continue; }
+                const candidates = name === "mode" && value === "first-last" ? ["first-last", "first-last-frame", "first-last-frames", "首尾帧", "first-frame", "image-to-video", "图生视频"] : [value];
+                const selected = candidates.map((candidate) => field.options!.find((item) => String(item.value).toLowerCase() === String(candidate).toLowerCase())).find(Boolean);
+                if (!selected) throw new Error(i18n.t("pricing.invalidParameter", { param: name, value: String(value) }));
+                params[name] = selected.value;
+            }
+            body = { ...body, params };
+        }
+        const { data } = await axios.post<PriceEstimate>(url, body, options);
         if (!data || typeof data.effective_total_rmb !== "number" || !Number.isFinite(data.effective_total_rmb) || data.effective_total_rmb < 0) throw new Error(i18n.t("pricing.invalidResponse"));
         return data;
     } catch (error) {

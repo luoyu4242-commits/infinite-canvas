@@ -1,26 +1,30 @@
-# @basketikun/canvas-proxy
+# Canvas Proxy（本地）
 
-Infinite Canvas 的本地转发代理。浏览器直连第三方 AI 接口时经常被 CORS 拦截，启动它之后，网页会把请求先发到本机，再由本机转发到目标地址。
+星程画布 的本地转发代理。浏览器直连第三方 AI 接口时经常被 CORS 拦截，启动它之后，网页会把请求先发到本机，再由本机转发到目标地址。
 
 代理只做转发：不改写请求体，不校验 API Key，不落盘任何日志。
 
 ## 使用
 
+在 `web` 目录运行 `bun run dev` 或 `bun run start`（构建后的本地预览）时，项目会自动启动 `http://127.0.0.1:23210`，`npm run dev` / `npm run start` 同样适用。若该地址已有本项目代理则复用；若被其他服务占用则提示错误。自动启动的代理随项目退出关闭，单独运行的代理不受影响。
+
+在「配置 → 本地代理」中启用代理，地址保持 `http://127.0.0.1:23210`。自动启动不修改浏览器保存的开关和地址。静态部署、Docker 或自定义代理端口仍需在访问者本机单独启动：
+
 ```bash
-npx @basketikun/canvas-proxy@latest
+node canvas-proxy/index.js
 ```
 
-默认监听 `http://127.0.0.1:23210`。把这个地址填进 Infinite Canvas 的「配置 → 本地代理」，并打开开关即可。
+默认监听 `http://127.0.0.1:23210`。把这个地址填进 星程画布 的「配置 → 本地代理」，并打开开关即可。
 
-带上 `@latest` 是因为 npx 会缓存已下载的版本，不加就可能一直运行旧版本。
+以上命令在项目根目录运行，使用当前仓库中的代理代码。
 
 可选参数：
 
 ```bash
-npx @basketikun/canvas-proxy@latest --port 23210 --host 127.0.0.1
+node canvas-proxy/index.js --port 23210 --host 127.0.0.1
 ```
 
-也支持 `PORT` / `HOST` 环境变量。
+单独启动时也支持 `PORT` / `HOST` 环境变量；项目自动启动固定使用上述默认地址。
 
 ## 转发规则
 
